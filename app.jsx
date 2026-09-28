@@ -1,0 +1,299 @@
+import React, { useState, useEffect } from 'react';
+
+// The adorable squishies you can win!
+const SQUISHIES = ['🦄', '💖', '⭐', '🌈', '🧁', '🎀', '🍬', '🍩', '🦋', '🌸', '🪄', '👑'];
+
+// The Ladder of Legends levels
+const LADDER_LEVELS = [
+  { min: 0, name: "Beginner Foal", graphic: "🐴" },
+  { min: 50, name: "Sparkle Trotter", graphic: "✨" },
+  { min: 150, name: "Rainbow Galloper", graphic: "🌈" },
+  { min: 300, name: "Star Jumper", graphic: "⭐" },
+  { min: 500, name: "Majestic Unicorn", graphic: "🦄" }
+];
+
+export default function App() {
+  const [view, setView] = useState('menu'); // 'menu', 'quiz', 'result', 'hall'
+  const [selectedTables, setSelectedTables] = useState([]);
+  const [questions, setQuestions] = useState([]);
+  const [currentQIndex, setCurrentQIndex] = useState(0);
+  const [quizScore, setQuizScore] = useState(0);
+  const [totalScore, setTotalScore] = useState(0);
+  const [squishies, setSquishies] = useState([]);
+  const [feedback, setFeedback] = useState(null);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [newSquishy, setNewSquishy] = useState(null);
+
+  // Options for 2x up to 12x tables
+  const tableOptions = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+  // Load saved progress from localStorage on start
+  useEffect(() => {
+    const savedScore = localStorage.getItem('unicorn_totalScore');
+    const savedSquishies = localStorage.getItem('unicorn_squishies');
+    if (savedScore) setTotalScore(parseInt(savedScore));
+    if (savedSquishies) setSquishies(JSON.parse(savedSquishies));
+  }, []);
+
+  // Save progress whenever score or squishies change
+  useEffect(() => {
+    localStorage.setItem('unicorn_totalScore', totalScore.toString());
+    localStorage.setItem('unicorn_squishies', JSON.stringify(squishies));
+  }, [totalScore, squishies]);
+
+  const toggleTable = (num) => {
+    if (selectedTables.includes(num)) {
+      setSelectedTables(selectedTables.filter(n => n !== num));
+    } else {
+      setSelectedTables([...selectedTables, num]);
+    }
+  };
+
+  const generateQuestions = () => {
+    const allPossible = [];
+    selectedTables.forEach(table => {
+      // Generate questions from 1 to 12 for the selected table
+      for (let i = 1; i <= 12; i++) {
+        allPossible.push({ num1: table, num2: i, answer: table * i });
+      }
+    });
+    
+    // Shuffle the array to randomize questions
+    const shuffled = allPossible.sort(() => 0.5 - Math.random());
+    // Pick 10 unique questions (or fewer if they only selected one table and we want strictly 10, though 1 table has 12 options)
+    const selected = shuffled.slice(0, 10);
+    
+    setQuestions(selected);
+    setQuizScore(0);
+    setCurrentQIndex(0);
+    setShowConfetti(false);
+    setNewSquishy(null);
+    setView('quiz');
+  };
+
+  const generateOptions = (correctAnswer) => {
+    const options = new Set([correctAnswer]);
+    while (options.size < 4) {
+      // Generate plausible wrong answers
+      const offset = Math.floor(Math.random() * 10) - 5;
+      const wrong = correctAnswer + offset;
+      if (wrong > 0 && wrong !== correctAnswer) {
+        options.add(wrong);
+      }
+    }
+    return Array.from(options).sort(() => 0.5 - Math.random());
+  };
+
+  const handleAnswer = (answer) => {
+    const currentQ = questions[currentQIndex];
+    const isCorrect = answer === currentQ.answer;
+    
+    if (isCorrect) {
+      setFeedback('correct');
+      setQuizScore(prev => prev + 1);
+    } else {
+      setFeedback('incorrect');
+    }
+
+    setTimeout(() => {
+      setFeedback(null);
+      if (currentQIndex < questions.length - 1) {
+        setCurrentQIndex(prev => prev + 1);
+      } else {
+        finishQuiz(quizScore + (isCorrect ? 1 : 0));
+      }
+    }, 1200); // 1.2 second delay to see the fun feedback
+  };
+
+  const finishQuiz = (finalScore) => {
+    const pointsEarned = finalScore * 10;
+    setTotalScore(prev => prev + pointsEarned); 
+    
+    if (finalScore === 10) {
+      setShowConfetti(true);
+      const randomSquishy = SQUISHIES[Math.floor(Math.random() * SQUISHIES.length)];
+      setNewSquishy(randomSquishy);
+      setSquishies(prev => [...prev, randomSquishy]);
+    }
+    setView('result');
+  };
+
+  const currentLevel = LADDER_LEVELS.slice().reverse().find(l => totalScore >= l.min) || LADDER_LEVELS[0];
+
+  // ------------- RENDER HELPERS -------------
+
+  const renderMenu = () => (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-pink-100 p-4 text-black text-center font-sans">
+      <h1 className="text-5xl font-extrabold mb-2 text-black drop-shadow-md">🦄 Magic Math! ✨</h1>
+      <p className="text-xl mb-6 font-bold">Pick your times tables to practice:</p>
+      
+      <div className="flex flex-wrap justify-center gap-3 max-w-lg mb-8">
+        {tableOptions.map(num => (
+          <button
+            key={num}
+            onClick={() => toggleTable(num)}
+            className={`w-16 h-16 rounded-full text-2xl font-bold shadow-lg transition-transform transform hover:scale-110 ${
+              selectedTables.includes(num) 
+                ? 'bg-purple-400 border-4 border-black' 
+                : 'bg-pink-300 border-2 border-black opacity-80'
+            }`}
+          >
+            {num}x
+          </button>
+        ))}
+      </div>
+
+      <button 
+        onClick={generateQuestions} 
+        disabled={selectedTables.length === 0}
+        className={`px-8 py-4 rounded-full text-3xl font-black shadow-xl transition-all ${
+          selectedTables.length === 0 
+            ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+            : 'bg-purple-500 hover:bg-purple-400 hover:scale-105 active:scale-95 border-4 border-black'
+        }`}
+      >
+        Let's Go! 🚀
+      </button>
+
+      <div className="mt-12 bg-white border-4 border-black p-6 rounded-3xl shadow-xl max-w-md w-full">
+        <h2 className="text-2xl font-black mb-4">🏆 Your Ladder Level</h2>
+        <div className="text-6xl mb-2">{currentLevel.graphic}</div>
+        <p className="text-xl font-bold">{currentLevel.name}</p>
+        <p className="text-lg mt-2">Total Magic Points: {totalScore}</p>
+      </div>
+
+      <button 
+        onClick={() => setView('hall')}
+        className="mt-6 px-6 py-3 bg-pink-400 border-2 border-black rounded-full font-bold shadow-md hover:bg-pink-300"
+      >
+        View Hall of Squishies 🧸
+      </button>
+    </div>
+  );
+
+  const renderQuiz = () => {
+    const currentQ = questions[currentQIndex];
+    const options = generateOptions(currentQ.answer);
+
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-purple-100 p-4 text-black text-center font-sans relative overflow-hidden">
+        
+        {/* Progress Bar */}
+        <div className="w-full max-w-lg bg-pink-200 rounded-full h-6 mb-8 border-2 border-black">
+          <div 
+            className="bg-purple-500 h-5 rounded-full transition-all duration-500" 
+            style={{ width: `${((currentQIndex) / 10) * 100}%` }}
+          ></div>
+        </div>
+
+        <h2 className="text-3xl font-bold mb-8">Question {currentQIndex + 1} of 10</h2>
+        
+        <div className="text-7xl font-black mb-12 drop-shadow-md">
+          {currentQ.num1} × {currentQ.num2} = ?
+        </div>
+
+        <div className="grid grid-cols-2 gap-6 max-w-md w-full">
+          {options.map((opt, i) => (
+            <button 
+              key={i}
+              onClick={() => !feedback && handleAnswer(opt)}
+              className="bg-pink-400 hover:bg-pink-300 active:bg-pink-500 text-4xl font-black py-8 rounded-3xl border-4 border-black shadow-xl transform hover:scale-105 transition-all"
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+
+        {/* Feedback Overlay */}
+        {feedback && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+            <div className={`text-6xl font-black p-10 rounded-3xl border-4 border-black shadow-2xl transform scale-110 animate-bounce ${
+              feedback === 'correct' ? 'bg-purple-400' : 'bg-pink-400'
+            }`}>
+              {feedback === 'correct' ? 'WOW! Correct! 🎉' : 'Oops! Next time! 🦄'}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderResult = () => (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-pink-100 p-4 text-black text-center font-sans relative overflow-hidden">
+      
+      {/* Super simple CSS Confetti simulation using emojis if 10/10 */}
+      {showConfetti && (
+        <div className="absolute inset-0 pointer-events-none flex justify-around animate-pulse text-6xl opacity-70">
+          <span>✨</span><span>🦄</span><span>🎉</span><span>🌈</span><span>✨</span>
+        </div>
+      )}
+
+      <h1 className="text-6xl font-black mb-6 drop-shadow-md z-10">
+        {quizScore === 10 ? 'PERFECT SCORE! 🌈' : 'Great Job! ✨'}
+      </h1>
+      
+      <p className="text-3xl font-bold mb-4 z-10">You got {quizScore} out of 10 correct!</p>
+      <p className="text-2xl font-bold mb-8 z-10">You earned {quizScore * 10} Magic Points!</p>
+
+      {newSquishy && (
+        <div className="bg-purple-200 border-4 border-black p-8 rounded-3xl shadow-2xl mb-8 z-10 animate-bounce">
+          <h2 className="text-2xl font-bold mb-4">You Won a New Squishy!</h2>
+          <div className="text-8xl">{newSquishy}</div>
+        </div>
+      )}
+
+      <div className="flex gap-4 z-10">
+        <button 
+          onClick={() => setView('menu')}
+          className="px-8 py-4 bg-purple-500 hover:bg-purple-400 border-4 border-black rounded-full text-2xl font-black shadow-xl transition-transform hover:scale-105"
+        >
+          Play Again 🚀
+        </button>
+        <button 
+          onClick={() => setView('hall')}
+          className="px-8 py-4 bg-pink-400 hover:bg-pink-300 border-4 border-black rounded-full text-2xl font-black shadow-xl transition-transform hover:scale-105"
+        >
+          Hall of Squishies 🧸
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderHall = () => (
+    <div className="flex flex-col items-center min-h-screen bg-purple-100 p-8 text-black text-center font-sans">
+      <h1 className="text-5xl font-black mb-8 drop-shadow-md">🧸 Hall of Squishies 🧸</h1>
+      
+      {squishies.length === 0 ? (
+        <p className="text-2xl font-bold bg-white border-4 border-black p-8 rounded-3xl">
+          Get a perfect 10/10 on a quiz to win your first squishy! 🦄
+        </p>
+      ) : (
+        <div className="bg-pink-200 border-4 border-black p-8 rounded-3xl w-full max-w-4xl shadow-xl">
+          <div className="flex flex-wrap justify-center gap-6">
+            {squishies.map((squishy, i) => (
+              <div key={i} className="bg-white border-2 border-black rounded-2xl p-4 text-6xl shadow-md transform hover:scale-110 transition-transform">
+                {squishy}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button 
+        onClick={() => setView('menu')}
+        className="mt-12 px-8 py-4 bg-purple-500 hover:bg-purple-400 border-4 border-black rounded-full text-2xl font-black shadow-xl transition-transform hover:scale-105"
+      >
+        Back to Menu 🏠
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen">
+      {view === 'menu' && renderMenu()}
+      {view === 'quiz' && renderQuiz()}
+      {view === 'result' && renderResult()}
+      {view === 'hall' && renderHall()}
+    </div>
+  );
+}
